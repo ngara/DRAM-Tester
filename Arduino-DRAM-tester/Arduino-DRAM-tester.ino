@@ -26,9 +26,8 @@
 #define WE              7
 
 #define STATUS		4
-#define DONE		19
 
-#define ADDR_BITS       10
+#define ADDR_BITS       9
 
 void fillSame(int val);
 void fillAlternating(int start);
@@ -37,7 +36,6 @@ void setup()
 {
   int mask;
 
-  
   pinMode(DIN, OUTPUT);
   pinMode(DOUT, INPUT);
 
@@ -46,55 +44,85 @@ void setup()
   pinMode(WE, OUTPUT);
 
   /* 10 is max address bits, even if chip is smaller */
-  mask = (1 << 10) - 1; 
+  mask = (1 << 10) - 1;
   DDRB = mask & 0x3f;
   mask >>= 6;
   DDRC = mask & 0x0f;
-  
+
   digitalWrite(CAS, HIGH);
   digitalWrite(RAS, HIGH);
   digitalWrite(WE, HIGH);
 
   pinMode(STATUS, OUTPUT);
-  pinMode(DONE, OUTPUT);
 
   digitalWrite(STATUS, HIGH);
-  digitalWrite(DONE, LOW);
+
+  Serial.begin(9600);
 }
 
 void loop()
 {
   int i;
 
+  Serial.println("Starting Test");
 
+  Serial.println("fillSame(0)");
+  signalBetweenTests();
   fillSame(0);
-  digitalWrite(STATUS, LOW);
-  delay(250);
-  digitalWrite(STATUS, HIGH);
 
+  Serial.println("fillSame(1)");
+  signalBetweenTests();
   fillSame(1);
-  digitalWrite(STATUS, LOW);
-  delay(250);
   digitalWrite(STATUS, HIGH);
 
+  Serial.println("fillAlternating(0)");
+  signalBetweenTests();
   fillAlternating(0);
   digitalWrite(STATUS, LOW);
-  delay(250);
-  digitalWrite(STATUS, HIGH);
 
+  Serial.println("fillAlternating(1)");
+  signalBetweenTests();
   fillAlternating(1);
   digitalWrite(STATUS, LOW);
-  delay(250);
-  digitalWrite(STATUS, HIGH);
+  delay(1000);
 
-  for (i = 4; i; i--) {
-    digitalWrite(DONE, HIGH);
-    delay(500);
-    digitalWrite(DONE, LOW);
-    delay(500);
+  Serial.println("Done and Passed!");
+
+  for (i = 6; i; i--) {
+    digitalWrite(STATUS, HIGH);
+    delay(250);
+    digitalWrite(STATUS, LOW);
+    delay(250);
   }
 
-  digitalWrite(DONE, HIGH);
+  digitalWrite(STATUS, HIGH);
+  while(1) {
+    signalPass();
+  }
+}
+
+void signalBetweenTests() {
+  digitalWrite(STATUS, HIGH);
+  delay(150);
+  digitalWrite(STATUS, LOW);
+  delay(150);
+  digitalWrite(STATUS, HIGH);
+  delay(150);
+  digitalWrite(STATUS, LOW);
+}
+
+void signalPass() {
+  digitalWrite(STATUS, HIGH);
+  delay(2000);
+  digitalWrite(STATUS, LOW);
+  delay(250);
+}
+
+void signalFail() {
+  digitalWrite(STATUS, HIGH);
+  delay(250);
+  digitalWrite(STATUS, LOW);
+  delay(250);
 }
 
 static inline int setAddress(int row, int col, int wrt)
@@ -117,7 +145,7 @@ static inline int setAddress(int row, int col, int wrt)
     digitalWrite(WE, HIGH);
   else
     val = digitalRead(DOUT);
- 
+
   digitalWrite(CAS, HIGH);
   digitalWrite(RAS, HIGH);
 
@@ -127,10 +155,16 @@ static inline int setAddress(int row, int col, int wrt)
 void fail(int row, int col)
 {
   digitalWrite(STATUS, LOW);
-  digitalWrite(DONE, HIGH);
 
-  while (1)
-    ;
+  Serial.print("Fail at row ");
+  Serial.print(row);
+  Serial.print(" col ");
+  Serial.println(col);
+
+  while (1) {
+    signalFail();
+  }
+
 }
 
 void fillSame(int val)
@@ -139,14 +173,14 @@ void fillSame(int val)
 
 
   digitalWrite(DIN, val);
-  
+
   for (col = 0; col < (1 << ADDR_BITS); col++)
     for (row = 0; row < (1 << ADDR_BITS); row++)
       setAddress(row, col, 1);
 
   /* Reverse DIN in case DOUT is floating */
   digitalWrite(DIN, !val);
- 
+
   for (col = 0; col < (1 << ADDR_BITS); col++)
     for (row = 0; row < (1 << ADDR_BITS); row++)
       if (setAddress(row, col, 0) != val)
@@ -170,7 +204,7 @@ void fillAlternating(int start)
   }
 
   for (col = 0; col < (1 << ADDR_BITS); col++) {
-    for (row = 0; row < (1 << ADDR_BITS); row++) { 
+    for (row = 0; row < (1 << ADDR_BITS); row++) {
       if (setAddress(row, col, 0) != i)
         fail(row, col);
 
